@@ -34,5 +34,6 @@
 *.idb
 *.pdb
 *.lastbuildstate
-MutualLogConverter/Debug/MutualLogConverter.log
-MutualLogConverter/Debug/MutualLogConverter.res
+*.filters
+*.log
+*.res
