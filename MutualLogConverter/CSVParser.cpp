@@ -16,7 +16,9 @@ CSVParser::CSVParser()
 
 CSVParser::~CSVParser()
 {
+	// Memory recycle
 	delete m_pCSVWriter;
+	delete m_pXSLXWriter;
 }
 
 void CSVParser::TerminateParser()
@@ -36,6 +38,8 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 	wstring tmp;
 	ULONG64 file_size = 0;
 	ULONG64 parsed_len = 0;
+	INT x_width = 0;
+	BOOL read_first_line = FALSE;
 	
 	// Open file for read only
 	wk_opt = CFile::modeRead | CFile::typeText ;
@@ -54,6 +58,45 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 
 	// Initialize parameter
 	m_TerminateSignal = FALSE;
+	
+	// Start the loop for reading width of X axis
+	while(l_csvFile.ReadString(read_str) && (m_TerminateSignal == FALSE)) {
+		// Handle them in wstring
+		wstringstream wss(read_str.GetString());
+
+		/****** From here, handle all strings in wstring or wchar_t* insdead of CString  ******/
+		
+		// Date
+		if(getline(wss, date, L',') == false || date == L"Date")
+			continue;
+		// Time
+		getline(wss, time, L',');
+		// Length
+		getline(wss, len, L',');
+		// Start Point X
+		getline(wss, s_pnt_x, L',');
+		// Start Point Y
+		getline(wss, s_pnt_y, L',');
+		// Direction
+		getline(wss, direc, L',');
+
+		if(!StringCompare(s_pnt_x, L"0")) {
+			if(x_width < stoi(len) + stoi(s_pnt_x)) {
+				x_width = stoi(len) + stoi(s_pnt_x);
+			}
+		}
+		else {
+			if(read_first_line == FALSE) {
+				read_first_line = TRUE;
+				x_width = stoi(len) + stoi(s_pnt_x);
+			}
+			else
+				break;
+		}
+	}
+
+	// Set the file pointer back to beginning
+	l_csvFile.SeekToBegin();
 
 	// Start the loop for pasring file
 	while(l_csvFile.ReadString(read_str) && (m_TerminateSignal == FALSE)) {
@@ -87,8 +130,10 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 				if(StringCompare(s_pnt_y, L"0")) {
 					// Insert new frame header when met X00, Y00
 					InsertNewLine();
+					InsertNewLine();
 					InsertCellAtBack(L"");
-					InsertCellAtBack(L"RX0");
+					for(int i = 0; i < x_width; i++)
+						InsertCellAtBack(L"RX"+to_wstring(i));
 					InsertNewLine();
 				}
 				tmp += L"TX";
@@ -97,8 +142,10 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 				if(StringCompare(s_pnt_y, L"0")) {
 					// Insert new frame header when met X00, Y00
 					InsertNewLine();
+					InsertNewLine();
 					InsertCellAtBack(L"");
-					InsertCellAtBack(L"TX0");
+					for(int i = 0; i < x_width; i++)
+						InsertCellAtBack(L"TX"+to_wstring(i));
 					InsertNewLine();
 				}
 				tmp += L"RX";
