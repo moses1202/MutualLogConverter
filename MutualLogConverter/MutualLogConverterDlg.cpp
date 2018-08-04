@@ -102,7 +102,6 @@ void CMutualLogConverterDlg::OnClose()
 
 		// Memory recycle
 		if(m_pCSVParser) delete m_pCSVParser;
-		//if(m_pCtrl) delete m_pCtrl;
 
 		// Messages
 		CDialog::OnCancel();
@@ -161,7 +160,7 @@ BOOL CMutualLogConverterDlg::OnInitDialog()
 
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
-	
+
 LRESULT CMutualLogConverterDlg::OnReceiveErrorCode(WPARAM wParam , LPARAM lParam)
 {
 	UINT error_code = wParam;
