@@ -7,11 +7,25 @@
 
 CSVWriter::CSVWriter()
 {
-	locale::global(std::locale(""));
+	locale::global(locale(""));
 }
 
 CSVWriter::~CSVWriter()
 {
+	// Call again to prevent memory leak (?)
+	locale::global(locale("C"));
+}
+
+BOOL CSVWriter::IfFileValid(wstring path)
+{
+	m_oFile.open(path, ios_base::out | ios_base::in);	// Will not create file
+	
+	if(m_oFile.is_open() == true) {
+		m_oFile.close();
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 BOOL CSVWriter::SetFile(wstring path)

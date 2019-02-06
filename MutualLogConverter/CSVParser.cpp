@@ -31,13 +31,13 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 	CStdioFile l_csvFile;
 	CFileException l_csvFile_exp;
 	UINT wk_opt;
-	BOOL ret;
+	BOOL ret = TRUE;
 	CString read_str;
 	wstring l_wstr;
 	wstring date, time, len, s_pnt_x, s_pnt_y, direc;
 	wstring tmp;
-	ULONG64 file_size = 0;
-	ULONG64 parsed_len = 0;
+	ULONGLONG file_size = 0;
+	ULONGLONG parsed_len = 0;
 	INT x_width = 0;
 	BOOL read_first_line = FALSE;
 	
@@ -50,10 +50,6 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 	}
 	//ret = m_pCSVWriter->SetFile((path.Left(path.GetLength() - CString(L".csv").GetLength()) + L"_Res.csv").GetString());
 	
-	// Open file
-	write_mode = mode;
-	ret = SetFile(path);
-
 	file_size = l_csvFile.GetLength();
 
 	// Initialize parameter
@@ -80,23 +76,66 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 		// Direction
 		getline(wss, direc, L',');
 
-		if(!StringCompare(s_pnt_x, L"0")) {
-			if(x_width < stoi(len) + stoi(s_pnt_x)) {
-				x_width = stoi(len) + stoi(s_pnt_x);
+		// Check format
+		if(!iswdigit(len[0]) || !iswdigit(s_pnt_x[0])) {
+			ret = FALSE;
+			break;
+		}
+		
+		// For RX=X, TX=Y
+		if(StringCompare(direc, L"X Axis")) {
+			if(!StringCompare(s_pnt_x, L"0")) {
+				if(x_width < stoi(len) + stoi(s_pnt_x)) {
+					x_width = stoi(len) + stoi(s_pnt_x);
+				}
+			}
+			else {
+				if(read_first_line == FALSE) {
+					read_first_line = TRUE;
+					x_width = stoi(len) + stoi(s_pnt_x);
+				}
+				else
+					break;
 			}
 		}
-		else {
-			if(read_first_line == FALSE) {
-				read_first_line = TRUE;
-				x_width = stoi(len) + stoi(s_pnt_x);
+		// For TX=X, RX=Y
+		else if(StringCompare(direc, L"Y Axis")) {
+			if(!StringCompare(s_pnt_y, L"0")) {
+				if(x_width < stoi(len) + stoi(s_pnt_y)) {
+					x_width = stoi(len) + stoi(s_pnt_y);
+				}
 			}
-			else
-				break;
+			else {
+				if(read_first_line == FALSE) {
+					read_first_line = TRUE;
+					x_width = stoi(len) + stoi(s_pnt_y);
+				}
+				else
+					break;
+			}
 		}
+	}
+	
+	// Check if format is valid
+	if(ret == FALSE || file_size == 0) {
+		TRACE(_T("Invalid format\n"));
+		MessageBox(L"Format invalid, abort conversion!");
+		return FALSE;
+	}
+	
+	// Open file
+	write_mode = mode;
+	ret = SetFile(path);
+	if(ret == FALSE) {
+		return FALSE;
 	}
 
 	// Set the file pointer back to beginning
 	l_csvFile.SeekToBegin();
+	read_first_line = TRUE;
+	
+	// Trigger message for setting progress bar to 0%
+	::SendMessage(theApp.dlg->GetSafeHwnd(), WM_APP_PROGRESS_UPDATE, (UINT)(0), 0);
 
 	// Start the loop for pasring file
 	while(l_csvFile.ReadString(read_str) && (m_TerminateSignal == FALSE)) {
@@ -106,7 +145,8 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 		/****** From here, handle all strings in wstring or wchar_t* insdead of CString  ******/
 
 		// Update current read size of file
-		parsed_len += read_str.GetLength() * sizeof(char);
+		//parsed_len += read_str.GetLength() * sizeof(char);
+		parsed_len = l_csvFile.GetPosition() + read_str.GetLength();
 
 		// Date
 		if(getline(wss, date, L',') == false || date == L"Date")
@@ -121,48 +161,83 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 		getline(wss, s_pnt_y, L',');
 		// Direction
 		getline(wss, direc, L',');
-
-		if(StringCompare(s_pnt_x, L"0")) {
-			// Insert new line when met X00
-			InsertNewLine();
-			tmp = L"";
-			if(StringCompare(direc, L"X Axis")) {
+		
+		// Check format
+		if(!iswdigit(len[0]) || !iswdigit(s_pnt_x[0]) || !iswdigit(s_pnt_y[0])) {
+			ret = FALSE;
+			break;
+		}
+		
+		// For RX=X, TX=Y
+		if(StringCompare(direc, L"X Axis")) {
+			if(StringCompare(s_pnt_x, L"0")) {
+				// Insert new line when met X00
+				if(read_first_line == FALSE) {
+					InsertNewLine();
+				}
+				tmp = L"";
 				if(StringCompare(s_pnt_y, L"0")) {
 					// Insert new frame header when met X00, Y00
-					InsertNewLine();
-					InsertNewLine();
+					if(read_first_line == FALSE) {
+						InsertNewLine();
+						InsertNewLine();
+					}
 					InsertCellAtBack(L"");
 					for(int i = 0; i < x_width; i++)
 						InsertCellAtBack(L"RX"+to_wstring(i));
 					InsertNewLine();
 				}
 				tmp += L"TX";
+				tmp += s_pnt_y;
+				// Insert new line header
+				InsertCellAtBack(tmp);
 			}
-			else {
-				if(StringCompare(s_pnt_y, L"0")) {
+		}
+		// For TX=X, RX=Y
+		else if(StringCompare(direc, L"Y Axis")) {
+			if(StringCompare(s_pnt_y, L"0")) {
+				// Insert new line when met Y00
+				if(read_first_line == FALSE) {
+					InsertNewLine();
+				}
+				tmp = L"";
+				if(StringCompare(s_pnt_x, L"0")) {
 					// Insert new frame header when met X00, Y00
-					InsertNewLine();
-					InsertNewLine();
+					if(read_first_line == FALSE) {
+						InsertNewLine();
+						InsertNewLine();
+					}
 					InsertCellAtBack(L"");
 					for(int i = 0; i < x_width; i++)
 						InsertCellAtBack(L"TX"+to_wstring(i));
 					InsertNewLine();
 				}
 				tmp += L"RX";
+				tmp += s_pnt_x;
+				// Insert new line header
+				InsertCellAtBack(tmp);
 			}
-			tmp += s_pnt_y;
-			// Insert new line header
-			InsertCellAtBack(tmp);
 		}
 
 		// Data
 		while(getline(wss, l_wstr, L',')) {
 			InsertCellAtBack(l_wstr);
 		}
+
+		// Update flag
+		read_first_line = FALSE;
 		
 		// Trigger message for updating progress bar
-		::PostMessage(theApp.dlg->GetSafeHwnd(), WM_APP_PROGRESS_UPDATE, (UINT)((parsed_len * 100) / file_size), 0);
+		::SendMessage(theApp.dlg->GetSafeHwnd(), WM_APP_PROGRESS_UPDATE, (UINT)((parsed_len) / (file_size / 100)), 0);
 	}
+	
+	// Check if format is valid
+	if(ret == FALSE) {
+		MessageBox(L"Format invalid, abort conversion!");
+	}
+	
+	// Trigger message for setting progress bar to 100%
+	::SendMessage(theApp.dlg->GetSafeHwnd(), WM_APP_PROGRESS_UPDATE, (UINT)(100), 0);
 
 	// Close file
 	l_csvFile.Close();
@@ -174,13 +249,27 @@ BOOL CSVParser::ParseFile(CString path, UINT mode)
 BOOL CSVParser::SetFile(CString path)
 {
 	BOOL ret = FALSE;
+	CString cpath;
+	wstring spath;
 
 	switch(write_mode) {
 	case CSV_WRITE:
-		ret = m_pCSVWriter->SetFile((path.Left(path.GetLength() - CString(L".csv").GetLength()) + L"_Res.csv").GetString());
+		cpath = (path.Left(path.GetLength() - CString(L".csv").GetLength()) + L"_Res.csv").GetString();
+		spath = cpath;
+		// Check for existing file
+		if(!m_pCSVWriter->IfFileValid(spath)) {
+			if(MessageBox(L"File \"" + cpath.Right(cpath.GetLength() - m_FolderPath.GetLength())
+				+ L"\" already exists, overwrite?", L"Overwrite", MB_ICONEXCLAMATION | MB_OKCANCEL) == IDCANCEL) {
+				ret = FALSE;
+				break;
+			}
+		}
+		ret = m_pCSVWriter->SetFile(spath);
 		break;
 	case XLSX_WRITE:
-		ret = m_pXSLXWriter->SetFile((path.Left(path.GetLength() - CString(L".csv").GetLength()) + L"_Res.xslx").GetString());
+		spath = (path.Left(path.GetLength() - CString(L".csv").GetLength()) + L"_Res.xslx").GetString();
+		spath = cpath;
+		ret = m_pXSLXWriter->SetFile(spath);
 		break;
 	default:
 		break;

@@ -32,6 +32,12 @@ protected:
 
 CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD)
 {
+#if 0
+	CBitmap cbmp;
+	cbmp.Attach((HBITMAP)::LoadImage(AfxGetInstanceHandle(), MAKEINTRESOURCE(IDB_BITMAP1),	IMAGE_BITMAP, 0, 0, LR_LOADMAP3DCOLORS) );
+	//cbmp.LoadBitmapW(IDB_BITMAP1);
+	((CStatic*)GetDlgItem(IDC_PICCNTRL))->SetBitmap(cbmp);
+#endif
 }
 
 void CAboutDlg::DoDataExchange(CDataExchange* pDX)
@@ -86,6 +92,11 @@ END_MESSAGE_MAP()
 void CMutualLogConverterDlg::OnClose()
 {
 	if(m_pConvertThread) {
+		if(m_IsConvertThreadRunning) {
+			if(MessageBox(L"The program is still running, do you really want to close?", L"Close", MB_ICONEXCLAMATION | MB_OKCANCEL) == IDCANCEL) {
+				return;
+			}
+		}
 		// Set shutdown signal and wait until the thread finish
 		InsertMsg(_T("Send shutdown signal."));
 		m_ShutdownSignal = TRUE;
@@ -102,6 +113,7 @@ void CMutualLogConverterDlg::OnClose()
 
 		// Memory recycle
 		if(m_pCSVParser) delete m_pCSVParser;
+		m_pCSVParser = NULL;
 
 		// Messages
 		CDialog::OnCancel();
@@ -179,6 +191,7 @@ LRESULT CMutualLogConverterDlg::OnReceiveErrorCode(WPARAM wParam , LPARAM lParam
 	return 0;
 }
 
+//#pragma optimize("", off)
 LRESULT CMutualLogConverterDlg::OnUpdateProgressBar(WPARAM wParam , LPARAM lParam)
 {
 	UINT progress = wParam;
@@ -187,6 +200,7 @@ LRESULT CMutualLogConverterDlg::OnUpdateProgressBar(WPARAM wParam , LPARAM lPara
 
 	return 0;
 }
+//#pragma optimize("", on)
 
 void CMutualLogConverterDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
@@ -242,6 +256,10 @@ void CMutualLogConverterDlg::TerminateThread(void)
 {
 	// Wait and close the thread
 	if(m_pConvertThread) {
+		// Try to terminate the current job immediately
+		if(m_IsConvertThreadRunning == TRUE) {
+			OnBnClickedBtnConvert();
+		}
 		WaitForSingleObject( m_pConvertThread->m_hThread, INFINITE );
 		delete m_pConvertThread;
 		m_pConvertThread = NULL;
@@ -260,19 +278,19 @@ void CMutualLogConverterDlg::ConvertThread(void)
 	GetDlgItem(IDC_BTN_FILE)->EnableWindow(FALSE);
 
 	// Start parsing loop
-	for(UINT i = 0; i < m_FileList.size() && (m_ShutdownSignal == FALSE); i++) {
-		m_pCtrl->SetPos(0); // Reset progress bar
+	for(UINT i = 0; (i < m_FileList.size()) && (m_ShutdownSignal == FALSE); i++) {
+		//m_pCtrl->SetPos(0); // Reset progress bar
 		
 		InsertMsg(L"Parsing file: " + m_FileList[i].Right(m_FileList[i].GetLength() - m_FolderPath.GetLength()));
 		if(m_pCSVParser->ParseFile(m_FileList[i], CSV_WRITE) == FALSE)
 			InsertMsg(L"Failed to open file: " + m_FileList[i]);
 		
-		m_pCtrl->SetPos(100); // Fill progress bar
+		//m_pCtrl->SetPos(100); // Fill progress bar
 	}
 
 	// Finish message
 	InsertMsg(STR_GUI_MSG_COMPLETE);
-	m_pCtrl->SetPos(100);
+	//m_pCtrl->SetPos(100);
 	
 	GetDlgItem(IDC_BTN_FILE)->EnableWindow(TRUE);
 	GetDlgItem(IDC_CHECK_BATCH)->EnableWindow(TRUE);
@@ -284,9 +302,17 @@ void CMutualLogConverterDlg::ConvertThread(void)
 void CMutualLogConverterDlg::OnBnClickedBtnConvert()
 {
 	// TODO: Add your control notification handler code here
+	// Check if file list is empty
 	if(m_FileList.empty())
 		return;
+	// Check if conversion is currently working
 	if(m_IsConvertThreadRunning == TRUE) {
+		if(MessageBox(L"The program is still running, do you really want to cancel?", L"Cancel", MB_ICONEXCLAMATION | MB_OKCANCEL) == IDCANCEL) {
+			return;
+		}
+		if(m_IsConvertThreadRunning == FALSE) {
+			return;
+		}
 		m_ShutdownSignal = TRUE;
 		m_pCSVParser->TerminateParser();
 		InsertMsg(STR_GUI_MSG_ABORTED);

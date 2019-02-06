@@ -13,6 +13,7 @@ class CSVWriter
 public:
 	CSVWriter();
 	~CSVWriter();
+	BOOL IfFileValid(wstring path);
 	BOOL SetFile(wstring path);
 	BOOL CloseFile();
 	void InsertData(wstring content, BOOL new_line, UINT num_copy);

@@ -10,7 +10,7 @@
 
 XLSXWriter::XLSXWriter()
 {
-	locale::global(std::locale(""));
+	locale::global(std::locale());
 
 	Init();
 }
@@ -51,6 +51,9 @@ BOOL XLSXWriter::SetFile(wstring path)
 	}
 	catch (COleDispatchException *e) {
 		TRACE(e->m_strDescription);
+#ifndef _DEBUG
+		e->m_strDescription;
+#endif //_DEBUG
 	}
 
 	return TRUE;
