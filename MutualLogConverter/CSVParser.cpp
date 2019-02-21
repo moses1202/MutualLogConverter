@@ -259,7 +259,7 @@ BOOL CSVParser::SetFile(CString path)
 		// Check for existing file
 		if(!m_pCSVWriter->IfFileValid(spath)) {
 			if(MessageBox(L"File \"" + cpath.Right(cpath.GetLength() - m_FolderPath.GetLength())
-				+ L"\" already exists, overwrite?", L"Overwrite", MB_ICONEXCLAMATION | MB_OKCANCEL) == IDCANCEL) {
+				+ L"\" already exists, overwrite?", L"Overwrite", MB_ICONWARNING | MB_SYSTEMMODAL | MB_TOPMOST | MB_OKCANCEL) == IDCANCEL) {
 				ret = FALSE;
 				break;
 			}
